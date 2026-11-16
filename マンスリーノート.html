@@ -36,6 +36,8 @@
   #lock .lbtn{width:220px;padding:12px;border-radius:10px;border:none;background:var(--accent);
     color:#fff;font-size:16px;font-weight:700;}
   #lock .lerr{color:#ffb4b4;font-size:13px;min-height:20px;margin-top:8px;text-align:center;}
+  #lock .fid{background:#fff;color:var(--ink);margin-bottom:14px;}
+  #lock .lkor{font-size:12px;color:#aab7c4;margin-bottom:10px;}
   #lock .reset{margin-top:36px;background:none;border:none;color:#7f8c99;font-size:11px;text-decoration:underline;}
 
   /* ===== ヘッダ ===== */
@@ -169,6 +171,8 @@
 <div id="lock">
   <h2 id="lkTitle">マンスリーノート</h2>
   <p id="lkMsg">パスコードを入力してください</p>
+  <button class="lbtn fid hidden" id="lkFid">Face IDで開く</button>
+  <div class="lkor hidden" id="lkOr">またはパスコード</div>
   <input type="password" id="lkPass" inputmode="numeric" autocomplete="off" maxlength="12">
   <input type="password" id="lkPass2" inputmode="numeric" autocomplete="off" maxlength="12" class="hidden" placeholder="もう一度">
   <button class="lbtn" id="lkBtn">開く</button>
@@ -252,6 +256,8 @@
       <textarea id="s_tpl"></textarea>
       <label>自動ロック（アプリを離れてから）</label>
       <select id="s_lock"><option value="0">すぐ</option><option value="60">1分後</option><option value="300">5分後</option></select>
+      <div class="sh-btns"><button id="s_fid" onclick="toggleFid()">Face IDで開けるようにする</button></div>
+      <p class="note" id="s_fidNote"></p>
       <div class="sh-btns"><button onclick="changePass()">パスコードを変更</button></div>
       <div class="sh-btns"><button onclick="openBackup()">控え（暗号化テキスト）</button></div>
       <p class="note">データはこのiPhoneの中だけに、パスコードで暗号化して保存しています。インターネットには送信しません。</p>
@@ -343,38 +349,123 @@ function showLock(mode){
                          : mode === "change" ? "新しいパスコードを入力してください"
                          : "パスコードを入力してください";
   $("lkBtn").textContent = isNew ? "決定" : "開く";
-  setTimeout(() => $("lkPass").focus(), 50);
+  const fid = mode === "open" && !!localStorage.getItem(FKEY);
+  $("lkFid").classList.toggle("hidden", !fid); $("lkOr").classList.toggle("hidden", !fid);
+  if(fid) $("lkMsg").textContent = "Face IDで開けます";
+  if(!(mode === "open" && localStorage.getItem(FKEY))) setTimeout(() => $("lkPass").focus(), 50);
 }
 $("lkBtn").onclick = async () => {
   const p = $("lkPass").value.trim();
   if(lockMode === "open"){
-    try{
-      const r = await openSealed(localStorage.getItem(SKEY), p);
-      KEY = r.key; SALT = r.salt;
-      db = Object.assign(db, r.data); db.cfg = Object.assign({days:3, lock:0}, r.data.cfg || {});
-      $("lock").classList.add("hidden"); goToday();
-    }catch(e){ $("lkErr").textContent = "パスコードが違います"; $("lkPass").value = ""; }
+    if(!(await unlockWith(p))){ $("lkErr").textContent = "パスコードが違います"; $("lkPass").value = ""; }
     return;
   }
   if(!/^\d{6,12}$/.test(p)){ $("lkErr").textContent = "6〜12桁の数字にしてください"; return; }
   if(p !== $("lkPass2").value.trim()){ $("lkErr").textContent = "2回の入力が一致しません"; return; }
   SALT = crypto.getRandomValues(new Uint8Array(16));
-  KEY = await deriveKey(p, SALT);
+  KEY = await deriveKey(p, SALT); PASS = p;
   persist(); await saving;
   $("lock").classList.add("hidden");
-  if(lockMode === "change") toast("パスコードを変更しました"); else goToday();
+  if(lockMode === "change"){
+    const had = !!localStorage.getItem(FKEY);
+    localStorage.removeItem(FKEY);
+    toast(had ? "パスコードを変更しました。Face IDは設定し直してください" : "パスコードを変更しました");
+  } else goToday();
 };
 $("lkPass").addEventListener("keydown", e => { if(e.key === "Enter") $("lkBtn").click(); });
 $("lkPass2").addEventListener("keydown", e => { if(e.key === "Enter") $("lkBtn").click(); });
 $("lkReset").onclick = () => {
   if(!confirm("保存されている入金予定をすべて消して、最初からやり直します。よろしいですか？")) return;
   if(!confirm("本当に消去しますか？元には戻せません。")) return;
-  localStorage.removeItem(SKEY); location.reload();
+  localStorage.removeItem(SKEY); localStorage.removeItem(FKEY); location.reload();
 };
 function lockNow(){
-  KEY = null; db.items = []; $("days").innerHTML = ""; $("todo").innerHTML = ""; $("dayList").innerHTML = "";
+  KEY = null; PASS = null; db.items = []; $("days").innerHTML = ""; $("todo").innerHTML = ""; $("dayList").innerHTML = "";
   showLock("open");
 }
+/* パスコードで開く（Face IDからも使う） */
+async function unlockWith(p){
+  try{
+    const r = await openSealed(localStorage.getItem(SKEY), p);
+    KEY = r.key; SALT = r.salt; PASS = p;
+    db = Object.assign(db, r.data); db.cfg = Object.assign({days:3, lock:0}, r.data.cfg || {});
+    $("lock").classList.add("hidden"); goToday();
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ================= Face ID（パスキー＋PRF） =================
+   Face IDで本人確認できたときだけ端末内の秘密値が得られ、それで暗号化したパスコードを取り出す。
+   顔の情報やパスコードが外部に出ることはない。 */
+const FKEY = "nyukin_kanri_fid_v1";
+let PASS = null, fidPending = null;
+const rnd = n => crypto.getRandomValues(new Uint8Array(n));
+async function prfGet(credId, prfSalt){
+  const a = await navigator.credentials.get({publicKey:{
+    challenge: rnd(32), allowCredentials:[{type:"public-key", id:credId}],
+    userVerification:"required", timeout:60000,
+    extensions:{prf:{eval:{first:prfSalt}}}}});
+  const r = a.getClientExtensionResults();
+  if(!r.prf || !r.prf.results || !r.prf.results.first) throw new Error("noprf");
+  return r.prf.results.first;
+}
+async function prfKey(out){ return crypto.subtle.importKey("raw", new Uint8Array(out).slice(0,32), {name:"AES-GCM"}, false, ["encrypt","decrypt"]); }
+async function saveFid(credId, prfSalt, out){
+  const k = await prfKey(out), iv = rnd(12);
+  const ct = await crypto.subtle.encrypt({name:"AES-GCM", iv}, k, enc.encode(PASS));
+  localStorage.setItem(FKEY, JSON.stringify({v:1, cred:b64(credId), salt:b64(prfSalt), iv:b64(iv), ct:b64(ct)}));
+}
+function fidUI(){
+  const on = !!localStorage.getItem(FKEY);
+  $("s_fid").textContent = fidPending ? "もう一度Face IDで確認して完了" : on ? "Face IDを解除" : "Face IDで開けるようにする";
+  $("s_fidNote").textContent = fidPending ? "登録の仕上げです。ボタンを押してFace IDで確認してください。"
+    : on ? "Face IDで開けます。使えないときはパスコードで開けます。" : "";
+}
+async function toggleFid(){
+  if(!KEY || !PASS){ toast("一度パスコードで開き直してから設定してください"); return; }
+  if(fidPending){                       // 2回目の確認（登録時に秘密値が返らない機種向け）
+    try{ const out = await prfGet(fidPending.id, fidPending.salt); await saveFid(fidPending.id, fidPending.salt, out);
+         fidPending = null; fidUI(); toast("Face IDで開けるようになりました"); }
+    catch(e){ toast("Face IDの確認ができませんでした"); }
+    return;
+  }
+  if(localStorage.getItem(FKEY)){
+    if(!confirm("Face IDでの解除をやめて、パスコードだけにしますか？")) return;
+    localStorage.removeItem(FKEY); fidUI(); toast("Face IDを解除しました"); return;
+  }
+  if(!window.PublicKeyCredential){ alert("この画面ではFace IDを使えません。iPhoneのホーム画面のアイコンから開いて設定してください。"); return; }
+  const prfSalt = rnd(32);
+  try{
+    const c = await navigator.credentials.create({publicKey:{
+      rp:{name:"マンスリーノート"},
+      user:{id: rnd(16), name:"マンスリーノート", displayName:"マンスリーノート"},
+      challenge: rnd(32),
+      pubKeyCredParams:[{type:"public-key", alg:-7},{type:"public-key", alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:"platform", residentKey:"preferred", userVerification:"required"},
+      timeout:60000, extensions:{prf:{eval:{first:prfSalt}}}}});
+    const ext = c.getClientExtensionResults();
+    if(ext.prf && ext.prf.results && ext.prf.results.first){
+      await saveFid(c.rawId, prfSalt, ext.prf.results.first); fidUI(); toast("Face IDで開けるようになりました"); return;
+    }
+    if(ext.prf && ext.prf.enabled === false){ alert("このiPhoneではFace IDでの暗号化に対応していないため、設定できませんでした。"); return; }
+    try{ const out = await prfGet(c.rawId, prfSalt); await saveFid(c.rawId, prfSalt, out); fidUI(); toast("Face IDで開けるようになりました"); }
+    catch(e){ fidPending = {id:c.rawId, salt:prfSalt}; fidUI(); }
+  }catch(e){
+    alert(e && e.name === "NotAllowedError" ? "Face IDの登録がキャンセルされました。" : "Face IDを設定できませんでした（" + (e && e.name || "エラー") + "）");
+  }
+}
+$("lkFid").onclick = async () => {
+  $("lkErr").textContent = "";
+  try{
+    const f = JSON.parse(localStorage.getItem(FKEY));
+    const out = await prfGet(ub64(f.cred), ub64(f.salt));
+    const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv:ub64(f.iv)}, await prfKey(out), ub64(f.ct));
+    if(!(await unlockWith(dec.decode(pt)))) throw new Error("bad");
+  }catch(e){
+    $("lkErr").textContent = (e && e.name === "NotAllowedError") ? "Face IDがキャンセルされました。パスコードでも開けます" : "Face IDで開けませんでした。パスコードで開いてください";
+  }
+};
+
 function changePass(){ closeOv("ovSet"); showLock("change"); }
 let hiddenAt = 0;
 window.addEventListener("pagehide", () => document.body.classList.add("shield"));
@@ -600,6 +691,7 @@ function doImport(){
 
 /* ================= 設定・控え ================= */
 function openSet(){
+  fidPending = null; fidUI();
   $("s_days").value = db.cfg.days; $("s_tpl").value = db.cfg.tpl; $("s_lock").value = String(db.cfg.lock);
   $("ovSet").classList.add("show");
 }
@@ -622,7 +714,7 @@ async function restoreBak(){
   try{
     const r = await openSealed(t, p);
     if(!confirm("現在のデータを、控えの " + (r.data.items||[]).length + " 件で置き換えます。よろしいですか？")) return;
-    KEY = r.key; SALT = r.salt; db = r.data; db.cfg = Object.assign({days:3, lock:0}, db.cfg || {});
+    KEY = r.key; SALT = r.salt; PASS = p; localStorage.removeItem(FKEY); db = r.data; db.cfg = Object.assign({days:3, lock:0}, db.cfg || {});
     persist(); closeOv("ovBak"); goToday(); toast("復元しました");
   }catch(e){ alert("復元できませんでした（控えかパスコードが違います）"); }
 }
