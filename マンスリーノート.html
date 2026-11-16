@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="マンスリーノート">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="apple-touch-icon" href="icon.png">
+<title>マンスリーノート</title>
+<style>
+  :root{
+    --ink:#1b2530; --soft:#5a6673; --paper:#eef1f4; --card:#fff; --line:#d7dde3;
+    --ok:#2e8b57; --warn:#e09b1a; --bad:#d14343; --accent:#2b6cb0; --line-green:#06c755;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+    background:var(--paper);color:var(--ink);font-size:15px;line-height:1.55;padding-bottom:40px;}
+  .num{font-variant-numeric:tabular-nums;}
+  @media (min-width:600px){ body{max-width:560px;margin:0 auto;box-shadow:0 0 0 1px var(--line);min-height:100vh;} .sheet{max-width:560px;margin:0 auto;} .toast{max-width:536px;margin:0 auto;} }
+  button{font-family:inherit;}
+  .hidden{display:none !important;}
+  body.shield main, body.shield header, body.shield .overlay, body.shield .toast{visibility:hidden;}
+
+  /* ===== ロック画面 ===== */
+  #lock{position:fixed;inset:0;z-index:50;background:var(--ink);color:#fff;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;}
+  #lock h2{margin:0 0 6px;font-size:18px;letter-spacing:.08em;}
+  #lock p{margin:0 0 18px;font-size:12px;color:#aab7c4;text-align:center;}
+  #lock input{width:220px;font-size:24px;text-align:center;letter-spacing:.3em;padding:10px;
+    border-radius:10px;border:none;margin-bottom:10px;}
+  #lock .lbtn{width:220px;padding:12px;border-radius:10px;border:none;background:var(--accent);
+    color:#fff;font-size:16px;font-weight:700;}
+  #lock .lerr{color:#ffb4b4;font-size:13px;min-height:20px;margin-top:8px;text-align:center;}
+  #lock .reset{margin-top:36px;background:none;border:none;color:#7f8c99;font-size:11px;text-decoration:underline;}
+
+  /* ===== ヘッダ ===== */
+  header{background:var(--ink);color:#eef3f8;padding:calc(12px + env(safe-area-inset-top)) 14px 10px;
+    position:sticky;top:0;z-index:10;}
+  .hd{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  header h1{font-size:17px;margin:0;letter-spacing:.06em;}
+  .hd-btns{display:flex;gap:6px;}
+  .hd-btns button{background:#26313d;border:none;color:#cfdae4;font-size:12px;padding:6px 10px;border-radius:8px;}
+  .chips{display:flex;gap:6px;margin-top:9px;overflow-x:auto;}
+  .chips::-webkit-scrollbar{display:none;}
+  .chip{flex:0 0 auto;background:#26313d;border-radius:999px;padding:3px 11px;font-size:11px;color:#cfdae4;white-space:nowrap;}
+  .chip b{font-size:14px;color:#fff;margin:0 2px;}
+  .chip.bad{background:var(--bad);color:#fff;}
+  .chip.warn{background:var(--warn);color:#fff;}
+
+  main{padding:12px 14px;}
+  h3{font-size:13px;color:var(--soft);margin:16px 2px 8px;font-weight:700;}
+
+  /* ===== カレンダー ===== */
+  .cal{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 8px 8px;}
+  .cal-nav{display:flex;align-items:center;justify-content:space-between;margin:0 4px 8px;}
+  .cal-nav b{font-size:16px;}
+  .cal-nav button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 12px;font-size:14px;}
+  .cal-nav .today{font-size:12px;}
+  .dow,.days{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .dow div{text-align:center;font-size:11px;color:var(--soft);padding-bottom:4px;}
+  .dow div:first-child{color:var(--bad);} .dow div:last-child{color:var(--accent);}
+  .day{min-width:0;min-height:54px;border-radius:8px;background:#f6f8fa;border:2px solid transparent;
+    padding:2px 3px;font-size:11px;display:flex;flex-direction:column;align-items:stretch;}
+  .day.out{background:none;}
+  .day .d{font-size:12px;font-weight:700;text-align:left;}
+  .day.sun .d{color:var(--bad);} .day.sat .d{color:var(--accent);}
+  .day.is-today{border-color:var(--ink);}
+  .day.sel{background:#dde9f6;}
+  .day .amt{margin-top:auto;font-size:10px;font-weight:700;border-radius:4px;padding:1px 2px;text-align:center;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;background:var(--accent);}
+  .day .amt.done{background:var(--ok);}
+  .day .amt.warn{background:var(--warn);}
+  .day .amt.bad{background:var(--bad);}
+  .day.blink-warn{animation:bWarn 1.2s ease-in-out infinite;}
+  .day.blink-bad{animation:bBad 1.2s ease-in-out infinite;}
+  @keyframes bWarn{0%,100%{border-color:var(--warn);}50%{border-color:#f6e2b8;background:#fff7e6;}}
+  @keyframes bBad{0%,100%{border-color:var(--bad);}50%{border-color:#f3c9c9;background:#fdeeee;}}
+
+  /* ===== 予定カード ===== */
+  .item{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--accent);
+    border-radius:12px;padding:10px 12px;margin-bottom:8px;}
+  .item.done{border-left-color:var(--ok);background:#f4faf6;}
+  .item.warn{border:2px solid var(--warn);border-left-width:6px;animation:bWarnC 1.2s ease-in-out infinite;}
+  .item.bad{border:2px solid var(--bad);border-left-width:6px;animation:bBadC 1.2s ease-in-out infinite;}
+  .item.asked{border-left-color:var(--warn);}
+  @keyframes bWarnC{0%,100%{border-color:var(--warn);background:#fff;}50%{border-color:#f6e2b8;background:#fff7e6;}}
+  @keyframes bBadC{0%,100%{border-color:var(--bad);background:#fff;}50%{border-color:#f3c9c9;background:#fdeeee;}}
+  .it-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+  .it-date{font-size:13px;font-weight:700;}
+  .it-state{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;color:#fff;background:var(--accent);white-space:nowrap;}
+  .it-state.done{background:var(--ok);} .it-state.warn{background:var(--warn);} .it-state.bad{background:var(--bad);}
+  .it-state.asked{background:#8a6d1f;}
+  .it-name{font-size:14px;margin:3px 0 8px;}
+  .it-name small{color:var(--soft);}
+  .it-btns{display:flex;gap:8px;flex-wrap:wrap;}
+  .amtbtn{flex:1 1 140px;padding:11px 10px;border-radius:10px;border:2px solid var(--accent);background:#fff;
+    color:var(--accent);font-size:17px;font-weight:700;}
+  .amtbtn small{display:block;font-size:10px;font-weight:400;}
+  .amtbtn.done{border-color:var(--ok);background:var(--ok);color:#fff;}
+  .linebtn{flex:1 1 120px;padding:11px 10px;border-radius:10px;border:none;background:var(--line-green);
+    color:#fff;font-size:14px;font-weight:700;}
+  .linebtn.sent{background:#9fd9b6;}
+  .it-sub{font-size:11px;color:var(--soft);margin-top:6px;display:flex;justify-content:space-between;gap:8px;}
+  .it-sub a{color:var(--soft);}
+  .empty{text-align:center;color:var(--soft);font-size:13px;padding:18px;background:var(--card);
+    border:1px dashed var(--line);border-radius:12px;}
+
+  .addbar{display:flex;gap:8px;margin-top:14px;}
+  .addbar button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:14px;}
+  .addbar .pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;}
+
+  /* ===== 重要（元本回収・投資実行） ===== */
+  :root{--key:#6b3fa0;--key-bg:#f3ecfb;}
+  .keybox{background:var(--key);color:#fff;border-radius:12px;padding:10px 12px;margin-top:4px;}
+  .keybox h4{margin:0 0 6px;font-size:13px;letter-spacing:.05em;}
+  .krow{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border-radius:8px;
+    padding:8px 10px;margin-top:6px;font-size:13px;border:none;color:#fff;width:100%;text-align:left;}
+  .krow .kd{font-weight:700;white-space:nowrap;}
+  .krow .kn{flex:1;min-width:0;}
+  .krow .ka{font-weight:700;white-space:nowrap;}
+  .krow .kc{font-size:11px;background:#fff;color:var(--key);border-radius:999px;padding:1px 8px;white-space:nowrap;font-weight:700;}
+  .krow.out .ka::before{content:"出金 ";font-size:10px;font-weight:400;}
+  .item.key{box-shadow:0 0 0 3px var(--key) inset;}
+  .item.key .it-name{font-size:16px;font-weight:700;}
+  .keytag{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--key);
+    border-radius:999px;padding:1px 9px;margin-right:6px;vertical-align:2px;}
+  .item.key .amtbtn{border-color:var(--key);color:var(--key);font-size:19px;}
+  .item.key .amtbtn.done{background:var(--key);color:#fff;}
+  .day.key{background:var(--key-bg);}
+  .day .star{font-size:10px;color:var(--key);font-weight:700;line-height:1.1;}
+  .day .amt.key{background:var(--key);}
+
+  /* ===== シート ===== */
+  .overlay{position:fixed;inset:0;z-index:30;display:none;background:rgba(20,28,36,.5);align-items:flex-end;}
+  .overlay.show{display:flex;}
+  .sheet{background:#fff;width:100%;border-radius:16px 16px 0 0;max-height:92vh;display:flex;flex-direction:column;}
+  .sh-head{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;background:var(--ink);
+    color:#fff;border-radius:16px 16px 0 0;font-weight:700;}
+  .sh-head button{border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;padding:7px 16px;border-radius:8px;}
+  .sh-body{padding:14px 16px calc(16px + env(safe-area-inset-bottom));overflow-y:auto;}
+  .frm label{display:block;font-size:12px;color:var(--soft);margin:10px 0 3px;}
+  .frm input,.frm select,.frm textarea{width:100%;font-family:inherit;font-size:16px;padding:9px 10px;
+    border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);}
+  .frm textarea{min-height:90px;}
+  .frm .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .note{font-size:12px;color:var(--soft);margin:6px 0;}
+  .sh-btns{display:flex;gap:8px;margin-top:16px;}
+  .sh-btns button{flex:1;padding:12px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:14px;font-weight:700;}
+  .sh-btns .pri{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .sh-btns .del{color:var(--bad);border-color:#e6c3c3;font-weight:400;}
+
+  /* ===== トースト（元に戻す付き） ===== */
+  .toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:12px;right:12px;z-index:60;
+    background:var(--ink);color:#fff;padding:12px 14px;border-radius:12px;font-size:14px;
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    opacity:0;pointer-events:none;transition:opacity .2s;}
+  .toast.show{opacity:1;pointer-events:auto;}
+  .toast button{border:none;background:#fff;color:var(--ink);font-weight:700;font-size:14px;padding:7px 14px;border-radius:8px;white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<!-- ロック画面（データはパスコードで暗号化して端末内のみに保存） -->
+<div id="lock">
+  <h2 id="lkTitle">マンスリーノート</h2>
+  <p id="lkMsg">パスコードを入力してください</p>
+  <input type="password" id="lkPass" inputmode="numeric" autocomplete="off" maxlength="12">
+  <input type="password" id="lkPass2" inputmode="numeric" autocomplete="off" maxlength="12" class="hidden" placeholder="もう一度">
+  <button class="lbtn" id="lkBtn">開く</button>
+  <div class="lerr" id="lkErr"></div>
+  <button class="reset" id="lkReset">パスコードを忘れた（全データを消して最初から）</button>
+</div>
+
+<header>
+  <div class="hd">
+    <h1>マンスリーノート</h1>
+    <div class="hd-btns">
+      <button onclick="openSet()">設定</button>
+      <button onclick="lockNow()">ロック</button>
+    </div>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<main>
+  <div class="keybox" id="keybox"></div>
+  <h3 id="hTodo">要対応</h3>
+  <div id="todo"></div>
+
+  <div class="cal" style="margin-top:14px">
+    <div class="cal-nav">
+      <button onclick="moveMonth(-1)">‹</button>
+      <b id="calTitle"></b>
+      <div style="display:flex;gap:6px">
+        <button class="today" onclick="goToday()">今日</button>
+        <button onclick="moveMonth(1)">›</button>
+      </div>
+    </div>
+    <div class="dow"><div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div></div>
+    <div class="days" id="days"></div>
+  </div>
+
+  <h3 id="hDay"></h3>
+  <div id="dayList"></div>
+
+  <div class="addbar">
+    <button class="pri" onclick="openEdit()">＋ 予定を追加</button>
+    <button onclick="openImport()">まとめて取り込み</button>
+  </div>
+</main>
+
+<!-- 予定の追加・編集 -->
+<div class="overlay" id="ovEdit">
+  <div class="sheet">
+    <div class="sh-head"><span id="edTitle">予定</span><button onclick="closeOv('ovEdit')">閉じる</button></div>
+    <div class="sh-body frm">
+      <div class="row2">
+        <div><label>入金予定日</label><input type="date" id="e_date"></div>
+        <div><label>金額（万円）</label><input type="number" id="e_amt" inputmode="decimal" step="0.1"></div>
+      </div>
+      <div class="row2">
+        <div><label>案件</label><input id="e_case" list="caseList" placeholder="①法人"></div>
+        <div><label>種別</label><input id="e_kind" list="kindList" placeholder="元本回収"></div>
+      </div>
+      <label>LINEの宛先メモ（相手の名前など）</label>
+      <input id="e_to" placeholder="〇〇様">
+      <label>メモ</label>
+      <input id="e_memo">
+      <datalist id="caseList"></datalist>
+      <datalist id="kindList"><option>元本回収</option><option>投資実行</option><option>金利</option><option>コンサル</option></datalist>
+      <div class="sh-btns">
+        <button class="del" id="e_del" onclick="delItem()">削除</button>
+        <button class="pri" onclick="saveItem()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="overlay" id="ovSet">
+  <div class="sheet">
+    <div class="sh-head"><span>設定</span><button onclick="closeSet()">完了</button></div>
+    <div class="sh-body frm">
+      <label>確認依頼を出すタイミング（予定日の何日前から点滅）</label>
+      <input type="number" id="s_days" min="0" max="30" inputmode="numeric">
+      <label>LINEの依頼文（{日付} {案件} {種別} {金額} {宛先} が置き換わります）</label>
+      <textarea id="s_tpl"></textarea>
+      <label>自動ロック（アプリを離れてから）</label>
+      <select id="s_lock"><option value="0">すぐ</option><option value="60">1分後</option><option value="300">5分後</option></select>
+      <div class="sh-btns"><button onclick="changePass()">パスコードを変更</button></div>
+      <div class="sh-btns"><button onclick="openBackup()">控え（暗号化テキスト）</button></div>
+      <p class="note">データはこのiPhoneの中だけに、パスコードで暗号化して保存しています。インターネットには送信しません。</p>
+    </div>
+  </div>
+</div>
+
+<!-- まとめて取り込み -->
+<div class="overlay" id="ovImp">
+  <div class="sheet">
+    <div class="sh-head"><span>まとめて取り込み</span><button onclick="closeOv('ovImp')">閉じる</button></div>
+    <div class="sh-body frm">
+      <p class="note">1行に1件、「日付,案件,種別,金額(万円),宛先」の形で貼り付けてください。<br>例：2026/12/10,①法人,元本回収,10000,〇〇様</p>
+      <textarea id="impText" style="min-height:200px;font-size:13px"></textarea>
+      <p class="note">同じ日付・案件・種別の予定がすでにある場合は、金額と宛先だけ更新します（完了の記録は残ります）。</p>
+      <div class="sh-btns"><button class="pri" onclick="doImport()">取り込む</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- 控え -->
+<div class="overlay" id="ovBak">
+  <div class="sheet">
+    <div class="sh-head"><span>控え（暗号化テキスト）</span><button onclick="closeOv('ovBak')">閉じる</button></div>
+    <div class="sh-body frm">
+      <p class="note">機種変更のときだけ使います。中身はパスコードで暗号化されているので、パスコードを知らない人には読めません。</p>
+      <textarea id="bakText" style="min-height:140px;font-size:11px"></textarea>
+      <div class="sh-btns">
+        <button onclick="copyBak()">コピー</button>
+        <button class="pri" onclick="restoreBak()">貼り付けた控えで復元</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="toastBtn">元に戻す</button></div>
+
+<script>
+"use strict";
+/* ================= 暗号化ストレージ ================= */
+const SKEY = "nyukin_kanri_v1";       // 端末内の保存先（中身は暗号文のみ）
+const enc = new TextEncoder(), dec = new TextDecoder();
+let KEY = null, SALT = null;
+let db = {items:[], cfg:{days:3, lock:0,
+  tpl:"お世話になっております。\n{日付}にご入金予定の{金額}について、ご確認をお願いいたします。"}};
+
+const b64 = u => btoa(String.fromCharCode(...new Uint8Array(u)));
+const ub64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function deriveKey(pass, salt){
+  const base = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2", salt, iterations:250000, hash:"SHA-256"},
+    base, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+}
+async function sealDB(){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:"AES-GCM", iv}, KEY, enc.encode(JSON.stringify(db)));
+  return JSON.stringify({v:1, salt:b64(SALT), iv:b64(iv), ct:b64(ct)});
+}
+async function openSealed(text, pass){
+  const o = JSON.parse(text);
+  const salt = ub64(o.salt);
+  const key = await deriveKey(pass, salt);
+  const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv:ub64(o.iv)}, key, ub64(o.ct));
+  return {key, salt, data: JSON.parse(dec.decode(pt))};
+}
+let saving = Promise.resolve();
+function persist(){
+  if(!KEY) return;
+  saving = saving.then(async () => {
+    try{
+      const s = await sealDB();
+      localStorage.setItem(SKEY, s);
+      if(localStorage.getItem(SKEY) !== s) throw 0;
+    }catch(e){ toast("⚠ 保存できませんでした"); }
+  });
+}
+
+/* ================= ロック ================= */
+let lockMode = "open";   // open | new | change
+const $ = id => document.getElementById(id);
+function showLock(mode){
+  lockMode = mode;
+  $("lock").classList.remove("hidden");
+  $("lkPass").value = ""; $("lkPass2").value = ""; $("lkErr").textContent = "";
+  const isNew = mode !== "open";
+  $("lkPass2").classList.toggle("hidden", !isNew);
+  $("lkReset").classList.toggle("hidden", mode !== "open");
+  $("lkMsg").textContent = mode === "new" ? "最初にパスコード（6桁以上の数字）を決めてください。忘れるとデータは戻せません。"
+                         : mode === "change" ? "新しいパスコードを入力してください"
+                         : "パスコードを入力してください";
+  $("lkBtn").textContent = isNew ? "決定" : "開く";
+  setTimeout(() => $("lkPass").focus(), 50);
+}
+$("lkBtn").onclick = async () => {
+  const p = $("lkPass").value.trim();
+  if(lockMode === "open"){
+    try{
+      const r = await openSealed(localStorage.getItem(SKEY), p);
+      KEY = r.key; SALT = r.salt;
+      db = Object.assign(db, r.data); db.cfg = Object.assign({days:3, lock:0}, r.data.cfg || {});
+      $("lock").classList.add("hidden"); goToday();
+    }catch(e){ $("lkErr").textContent = "パスコードが違います"; $("lkPass").value = ""; }
+    return;
+  }
+  if(!/^\d{6,12}$/.test(p)){ $("lkErr").textContent = "6〜12桁の数字にしてください"; return; }
+  if(p !== $("lkPass2").value.trim()){ $("lkErr").textContent = "2回の入力が一致しません"; return; }
+  SALT = crypto.getRandomValues(new Uint8Array(16));
+  KEY = await deriveKey(p, SALT);
+  persist(); await saving;
+  $("lock").classList.add("hidden");
+  if(lockMode === "change") toast("パスコードを変更しました"); else goToday();
+};
+$("lkPass").addEventListener("keydown", e => { if(e.key === "Enter") $("lkBtn").click(); });
+$("lkPass2").addEventListener("keydown", e => { if(e.key === "Enter") $("lkBtn").click(); });
+$("lkReset").onclick = () => {
+  if(!confirm("保存されている入金予定をすべて消して、最初からやり直します。よろしいですか？")) return;
+  if(!confirm("本当に消去しますか？元には戻せません。")) return;
+  localStorage.removeItem(SKEY); location.reload();
+};
+function lockNow(){
+  KEY = null; db.items = []; $("days").innerHTML = ""; $("todo").innerHTML = ""; $("dayList").innerHTML = "";
+  showLock("open");
+}
+function changePass(){ closeOv("ovSet"); showLock("change"); }
+let hiddenAt = 0;
+window.addEventListener("pagehide", () => document.body.classList.add("shield"));
+window.addEventListener("pageshow", () => { if(document.visibilityState === "visible" && KEY) document.body.classList.remove("shield"); });
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "hidden"){ hiddenAt = Date.now(); document.body.classList.add("shield"); }
+  else if((document.body.classList.remove("shield"), KEY)){
+    if(Date.now() - hiddenAt >= (Number(db.cfg.lock) || 0) * 1000 && hiddenAt) lockNow();
+    else render();
+  }
+});
+
+/* ================= 日付・状態 ================= */
+function today0(){ const d = new Date(); d.setHours(0,0,0,0); return d; }
+function ymd(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function daysTo(s){ return Math.round((new Date(s + "T00:00:00") - today0()) / 86400000); }
+function fmtD(s){ const d = new Date(s + "T00:00:00"); return (d.getMonth()+1) + "/" + d.getDate() + "（" + "日月火水木金土"[d.getDay()] + "）"; }
+function fmtDY(s){ const d = new Date(s + "T00:00:00"); return d.getFullYear() + "年" + (d.getMonth()+1) + "月" + d.getDate() + "日"; }
+function fmtAmt(v){ return Number(v).toLocaleString("ja-JP", {maximumFractionDigits:1}) + "万円"; }
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+/* 状態：done 完了 / bad 予定日を過ぎて未入金 / warn 依頼を出す時期（未依頼） / asked 依頼済み・入金待ち / plan 予定 */
+function stateOf(it){
+  if(it.done) return "done";
+  const n = daysTo(it.date);
+  if(n < 0) return "bad";
+  if(n <= Number(db.cfg.days)) return it.asked ? "asked" : "warn";
+  return "plan";
+}
+const STATE_TXT = {done:"入金済み", bad:"未入金（予定日超過）", warn:"確認依頼を送る", asked:"依頼済み・入金待ち", plan:"予定"};
+const STATE_TXT_OUT = {done:"実行済み", bad:"未実行（予定日超過）", warn:"実行の準備", asked:"実行の準備", plan:"予定"};
+/* 重要：元本回収・投資実行 ／ 出金：投資実行 */
+function isOut(it){ return /投資実行|貸付/.test(it.kind || ""); }
+function isKey(it){ return isOut(it) || /元本|元金/.test(it.kind || ""); }
+function cellAmt(v){ return v >= 10000 ? (Math.round(v/1000)/10) + "億" : Number(v).toLocaleString("ja-JP",{maximumFractionDigits:1}); }
+function inSum(list){ return list.filter(i => !isOut(i)).reduce((s,i) => s + Number(i.amount||0), 0); }
+
+/* ================= 描画 ================= */
+let viewY, viewM, selDay = null;
+function goToday(){ const t = today0(); viewY = t.getFullYear(); viewM = t.getMonth(); selDay = ymd(t); render(); }
+function moveMonth(n){ viewM += n; if(viewM < 0){ viewM = 11; viewY--; } if(viewM > 11){ viewM = 0; viewY++; } selDay = null; render(); }
+function pickDay(s){ selDay = s; render(); }
+function jumpTo(s){ const d = new Date(s + "T00:00:00"); viewY = d.getFullYear(); viewM = d.getMonth(); selDay = s; render(); document.getElementById("hDay").scrollIntoView({behavior:"smooth"}); }
+
+function itemHTML(it){
+  const st = stateOf(it);
+  const n = daysTo(it.date);
+  const when = it.done ? "" : n === 0 ? "（本日）" : n > 0 ? "（あと" + n + "日）" : "（" + (-n) + "日超過）";
+  const out = isOut(it), key = isKey(it);
+  const showLine = !out && !it.done && (st === "warn" || st === "asked" || st === "bad");
+  return '<div class="item ' + st + (key ? ' key' : '') + '">' +
+    '<div class="it-top"><span class="it-date num">' + fmtD(it.date) + ' ' + when + '</span>' +
+      '<span class="it-state ' + st + '">' + (out ? STATE_TXT_OUT : STATE_TXT)[st] + '</span></div>' +
+    '<div class="it-name">' + (key ? '<span class="keytag">★重要</span>' : '') + esc(it.case) + '　<small>' + esc(it.kind) + (it.to ? '／' + esc(it.to) : '') + '</small></div>' +
+    '<div class="it-btns">' +
+      '<button class="amtbtn num' + (it.done ? ' done' : '') + '" onclick="toggleDone(\'' + it.id + '\')">' +
+        (it.done ? '✓ ' : '') + (out ? '出金 ' : '') + fmtAmt(it.amount) +
+        '<small>' + (it.done ? 'タップで取り消し' : out ? '実行したらタップ' : '入金を確認したらタップ') + '</small></button>' +
+      (showLine ? '<button class="linebtn' + (it.asked ? ' sent' : '') + '" onclick="sendLine(\'' + it.id + '\')">' +
+        (it.asked ? 'LINEで再依頼' : 'LINEで確認依頼') + '</button>' : '') +
+    '</div>' +
+    '<div class="it-sub"><span>' +
+      (it.done && it.doneAt ? (out ? '実行 ' : '入金確認 ') + fmtD(it.doneAt) : it.asked ? '依頼 ' + fmtD(it.asked) : '') +
+      (it.memo ? '　' + esc(it.memo) : '') + '</span>' +
+      '<a href="#" onclick="openEdit(\'' + it.id + '\');return false;">編集</a></div>' +
+  '</div>';
+}
+
+function render(){
+  if(!KEY) return;
+  const items = db.items.slice().sort((a,b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+
+  /* ★重要な予定（未完了の元本回収・投資実行を直近から） */
+  const keys = items.filter(it => isKey(it) && !it.done);
+  $("keybox").innerHTML = '<h4>★ 重要な予定（元本回収・投資実行）</h4>' + (keys.length ? keys.slice(0,6).map(it => {
+    const n = daysTo(it.date);
+    return '<button class="krow' + (isOut(it) ? ' out' : '') + '" onclick="jumpTo(\'' + it.date + '\')">' +
+      '<span class="kd num">' + fmtD(it.date) + '</span>' +
+      '<span class="kn">' + esc(it.case) + ' ' + esc(it.kind) + '</span>' +
+      '<span class="ka num">' + fmtAmt(it.amount) + '</span>' +
+      '<span class="kc num">' + (n < 0 ? (-n) + '日超過' : n === 0 ? '本日' : 'あと' + n + '日') + '</span></button>';
+  }).join("") : '<div style="font-size:12px;opacity:.8">予定はありません</div>');
+
+  /* 要対応（期限超過 → 依頼時期 → 依頼済み） */
+  const order = {bad:0, warn:1, asked:2};
+  const todo = items.filter(it => order[stateOf(it)] !== undefined)
+                    .sort((a,b) => order[stateOf(a)] - order[stateOf(b)] || (a.date < b.date ? -1 : 1));
+  $("todo").innerHTML = todo.length ? todo.map(itemHTML).join("")
+    : '<div class="empty">いま対応が必要な入金はありません</div>';
+
+  /* チップ */
+  const cBad = items.filter(i => stateOf(i) === "bad").length;
+  const cWarn = items.filter(i => stateOf(i) === "warn").length;
+  const ym = viewY + "-" + String(viewM+1).padStart(2,"0");
+  const mon = items.filter(i => i.date.slice(0,7) === ym);
+  const monSum = inSum(mon);
+  const monDone = inSum(mon.filter(i => i.done));
+  $("chips").innerHTML =
+    (cBad ? '<span class="chip bad">未入金<b>' + cBad + '</b>件</span>' : '') +
+    (cWarn ? '<span class="chip warn">依頼待ち<b>' + cWarn + '</b>件</span>' : '') +
+    '<span class="chip">' + (viewM+1) + '月 予定<b class="num">' + fmtAmt(monSum) + '</b></span>' +
+    '<span class="chip">うち入金済<b class="num">' + fmtAmt(monDone) + '</b></span>';
+
+  /* カレンダー */
+  $("calTitle").textContent = viewY + "年" + (viewM+1) + "月";
+  const first = new Date(viewY, viewM, 1), start = new Date(first); start.setDate(1 - first.getDay());
+  const tdy = ymd(today0());
+  let html = "";
+  for(let i = 0; i < 42; i++){
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    if(i >= 35 && d.getMonth() !== viewM) break;
+    const s = ymd(d), out = d.getMonth() !== viewM;
+    const its = items.filter(x => x.date === s);
+    let cls = "day" + (out ? " out" : "") + (d.getDay() === 0 ? " sun" : d.getDay() === 6 ? " sat" : "") +
+              (s === tdy ? " is-today" : "") + (s === selDay ? " sel" : "");
+    let amt = "";
+    if(its.length){
+      const sts = its.map(stateOf);
+      const top = sts.includes("bad") ? "bad" : sts.includes("warn") ? "warn" : sts.includes("asked") ? "warn"
+                : sts.every(x => x === "done") ? "done" : "plan";
+      if(sts.includes("bad")) cls += " blink-bad"; else if(sts.includes("warn")) cls += " blink-warn";
+      const sum = inSum(its) || its.reduce((a,x) => a + Number(x.amount||0), 0);
+      const kItems = its.filter(isKey);
+      if(kItems.length){
+        cls += " key";
+        amt = '<span class="star">★重要</span>';
+      }
+      amt += '<span class="amt num ' + (kItems.length && top === "plan" ? "key" : top) + '">' + cellAmt(sum) + '</span>';
+    }
+    html += '<div class="' + cls + '" onclick="pickDay(\'' + s + '\')"><span class="d">' + d.getDate() + '</span>' + amt + '</div>';
+  }
+  $("days").innerHTML = html;
+
+  /* 選んだ日（未選択ならその月の一覧） */
+  if(selDay && selDay.slice(0,7) === ym){
+    const list = items.filter(x => x.date === selDay).sort((a,b) => isKey(b) - isKey(a));
+    $("hDay").textContent = fmtDY(selDay) + " の予定";
+    $("dayList").innerHTML = list.length ? list.map(itemHTML).join("") : '<div class="empty">この日の予定はありません</div>';
+  }else{
+    $("hDay").textContent = (viewM+1) + "月の予定（金額は万円）";
+    $("dayList").innerHTML = mon.length ? mon.map(itemHTML).join("") : '<div class="empty">この月の予定はありません</div>';
+  }
+
+  /* 入力候補 */
+  const cases = [...new Set(db.items.map(i => i.case).filter(Boolean))];
+  $("caseList").innerHTML = cases.map(c => '<option>' + esc(c) + '</option>').join("");
+}
+
+/* ================= 完了・取り消し ================= */
+function toggleDone(id){
+  const it = db.items.find(x => x.id === id); if(!it) return;
+  const before = {done: it.done, doneAt: it.doneAt};
+  if(it.done){
+    if(!confirm(fmtD(it.date) + " " + it.case + " " + fmtAmt(it.amount) + (isOut(it) ? "\nの実行済みを取り消しますか？" : "\nの入金済みを取り消して、未入金に戻しますか？"))) return;
+    it.done = false; it.doneAt = "";
+    persist(); render();
+    toast(isOut(it) ? "未実行に戻しました" : "未入金に戻しました", () => { Object.assign(it, before); persist(); render(); });
+  }else{
+    it.done = true; it.doneAt = ymd(today0());
+    persist(); render();
+    toast(fmtAmt(it.amount) + (isOut(it) ? " を実行済みにしました" : " を入金済みにしました"), () => { Object.assign(it, before); persist(); render(); });
+  }
+}
+
+/* ================= LINEで確認依頼 ================= */
+function sendLine(id){
+  const it = db.items.find(x => x.id === id); if(!it) return;
+  const text = String(db.cfg.tpl || "")
+    .replaceAll("{日付}", fmtDY(it.date)).replaceAll("{案件}", it.case || "")
+    .replaceAll("{種別}", it.kind || "").replaceAll("{金額}", fmtAmt(it.amount)).replaceAll("{宛先}", it.to || "");
+  const prev = it.asked || "";
+  it.asked = ymd(today0()); persist(); render();
+  location.href = "https://line.me/R/msg/text/?" + encodeURIComponent(text);
+  setTimeout(() => toast("依頼済みにしました", () => { it.asked = prev; persist(); render(); }), 400);
+}
+
+/* ================= 追加・編集 ================= */
+let editId = null;
+function openEdit(id){
+  editId = id || null;
+  const it = id ? db.items.find(x => x.id === id) : {date: selDay || ymd(today0()), amount:"", case:"", kind:"", to:"", memo:""};
+  $("edTitle").textContent = id ? "予定を編集" : "予定を追加";
+  $("e_date").value = it.date; $("e_amt").value = it.amount; $("e_case").value = it.case;
+  $("e_kind").value = it.kind; $("e_to").value = it.to || ""; $("e_memo").value = it.memo || "";
+  $("e_del").classList.toggle("hidden", !id);
+  $("ovEdit").classList.add("show");
+}
+function saveItem(){
+  const v = {date:$("e_date").value, amount:parseFloat($("e_amt").value), case:$("e_case").value.trim(),
+             kind:$("e_kind").value.trim(), to:$("e_to").value.trim(), memo:$("e_memo").value.trim()};
+  if(!v.date || isNaN(v.amount)){ alert("入金予定日と金額を入れてください"); return; }
+  if(editId) Object.assign(db.items.find(x => x.id === editId), v);
+  else db.items.push(Object.assign({id: uid(), done:false, doneAt:"", asked:""}, v));
+  persist(); closeOv("ovEdit"); selDay = v.date; const d = new Date(v.date+"T00:00:00"); viewY = d.getFullYear(); viewM = d.getMonth(); render();
+}
+function delItem(){
+  if(!confirm("この予定を削除しますか？")) return;
+  const idx = db.items.findIndex(x => x.id === editId); if(idx < 0) return;
+  const [gone] = db.items.splice(idx, 1);
+  persist(); closeOv("ovEdit"); render();
+  toast("削除しました", () => { db.items.splice(idx, 0, gone); persist(); render(); });
+}
+function uid(){ return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+/* ================= 取り込み ================= */
+function openImport(){ $("impText").value = ""; $("ovImp").classList.add("show"); }
+function doImport(){
+  const lines = $("impText").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  let add = 0, upd = 0, bad = [];
+  lines.forEach((ln, i) => {
+    const c = ln.split(/[,\t，]/).map(s => s.trim());
+    const m = (c[0]||"").match(/^(\d{4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/);
+    const amt = parseFloat((c[3]||"").replace(/[,万円]/g, ""));
+    if(!m || isNaN(amt)){ bad.push(i+1); return; }
+    const date = m[1] + "-" + m[2].padStart(2,"0") + "-" + m[3].padStart(2,"0");
+    const rec = {date, case:c[1]||"", kind:c[2]||"", amount:amt, to:c[4]||""};
+    const ex = db.items.find(x => x.date === date && x.case === rec.case && x.kind === rec.kind);
+    if(ex){ ex.amount = amt; if(rec.to) ex.to = rec.to; upd++; }
+    else{ db.items.push(Object.assign({id:uid(), done:false, doneAt:"", asked:"", memo:""}, rec)); add++; }
+  });
+  persist(); closeOv("ovImp"); render();
+  alert("追加 " + add + "件／更新 " + upd + "件" + (bad.length ? "\n読めなかった行：" + bad.join(", ") + "行目" : ""));
+}
+
+/* ================= 設定・控え ================= */
+function openSet(){
+  $("s_days").value = db.cfg.days; $("s_tpl").value = db.cfg.tpl; $("s_lock").value = String(db.cfg.lock);
+  $("ovSet").classList.add("show");
+}
+function closeSet(){
+  const n = parseInt($("s_days").value, 10);
+  db.cfg.days = isNaN(n) ? 3 : Math.max(0, Math.min(30, n));
+  db.cfg.tpl = $("s_tpl").value; db.cfg.lock = Number($("s_lock").value);
+  persist(); closeOv("ovSet"); render();
+}
+async function openBackup(){ await saving; $("bakText").value = localStorage.getItem(SKEY) || ""; closeOv("ovSet"); $("ovBak").classList.add("show"); }
+function copyBak(){
+  const ta = $("bakText"); ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length);
+  let ok = false; try{ ok = document.execCommand("copy"); }catch(e){}
+  if(!ok && navigator.clipboard) navigator.clipboard.writeText(ta.value).then(() => toast("コピーしました"));
+  else toast(ok ? "コピーしました" : "長押しで全選択→コピーしてください");
+}
+async function restoreBak(){
+  const t = $("bakText").value.trim();
+  const p = prompt("この控えを作ったときのパスコードを入力してください"); if(p === null) return;
+  try{
+    const r = await openSealed(t, p);
+    if(!confirm("現在のデータを、控えの " + (r.data.items||[]).length + " 件で置き換えます。よろしいですか？")) return;
+    KEY = r.key; SALT = r.salt; db = r.data; db.cfg = Object.assign({days:3, lock:0}, db.cfg || {});
+    persist(); closeOv("ovBak"); goToday(); toast("復元しました");
+  }catch(e){ alert("復元できませんでした（控えかパスコードが違います）"); }
+}
+
+function closeOv(id){ $(id).classList.remove("show"); }
+["ovEdit","ovSet","ovImp","ovBak"].forEach(id => $(id).addEventListener("click", e => {
+  if(e.target.id === id){ id === "ovSet" ? closeSet() : closeOv(id); }
+}));
+
+/* ================= トースト ================= */
+let tTimer = null, tUndo = null;
+function toast(msg, undo){
+  $("toastMsg").textContent = msg; tUndo = undo || null;
+  $("toastBtn").classList.toggle("hidden", !undo);
+  $("toast").classList.add("show");
+  clearTimeout(tTimer); tTimer = setTimeout(() => { $("toast").classList.remove("show"); tUndo = null; }, undo ? 6000 : 2200);
+}
+$("toastBtn").onclick = () => { if(tUndo){ tUndo(); tUndo = null; } $("toast").classList.remove("show"); toast("元に戻しました"); };
+
+/* 日付が変わったら判定し直す */
+let lastDay = ymd(today0());
+setInterval(() => { const t = ymd(today0()); if(t !== lastDay){ lastDay = t; render(); } }, 60000);
+
+/* ================= 起動 ================= */
+if(!window.crypto || !crypto.subtle){
+  document.body.innerHTML = '<p style="padding:30px">このブラウザでは暗号化が使えないため起動できません。SafariまたはEdgeで開いてください。</p>';
+}else{
+  showLock(localStorage.getItem(SKEY) ? "open" : "new");
+}
+</script>
+</body>
+</html>
