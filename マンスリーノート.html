@@ -118,24 +118,42 @@
 
   /* ===== 重要（元本回収・投資実行） ===== */
   :root{--key:#6b3fa0;--key-bg:#f3ecfb;}
-  .keybox{background:var(--key);color:#fff;border-radius:12px;padding:10px 12px;margin-top:4px;}
-  .keybox h4{margin:0 0 6px;font-size:13px;letter-spacing:.05em;}
+  :root{--rec:#1f7a5a;--rec-bg:#e5f4ee;--out:#c2410c;--out-bg:#fdeee4;}
+  .keybox{background:#2a3542;color:#fff;border-radius:12px;padding:0;margin-top:4px;overflow:hidden;}
+  .khead{display:flex;justify-content:space-between;align-items:center;width:100%;border:none;background:none;
+    color:#fff;font-size:13px;font-weight:700;letter-spacing:.04em;padding:12px;text-align:left;}
+  .khead .kcount{font-size:12px;font-weight:400;color:#cfdae4;white-space:nowrap;}
+  .kbody{padding:0 12px 12px;}
+  .klegend{display:flex;gap:12px;font-size:11px;color:#cfdae4;margin-bottom:2px;}
+  .klegend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;}
   .krow{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border-radius:8px;
     padding:8px 10px;margin-top:6px;font-size:13px;border:none;color:#fff;width:100%;text-align:left;}
   .krow .kd{font-weight:700;white-space:nowrap;}
   .krow .kn{flex:1;min-width:0;}
   .krow .ka{font-weight:700;white-space:nowrap;}
-  .krow .kc{font-size:11px;background:#fff;color:var(--key);border-radius:999px;padding:1px 8px;white-space:nowrap;font-weight:700;}
+  .krow.rec{background:var(--rec);} .krow.out{background:var(--out);}
+  .krow .kc{font-size:11px;background:#fff;color:var(--ink);border-radius:999px;padding:1px 8px;white-space:nowrap;font-weight:700;}
   .krow.out .ka::before{content:"出金 ";font-size:10px;font-weight:400;}
-  .item.key{box-shadow:0 0 0 3px var(--key) inset;}
+  .item.key{box-shadow:0 0 0 3px var(--kc) inset;}
+  .item.key.rec{--kc:var(--rec);} .item.key.out{--kc:var(--out);}
   .item.key .it-name{font-size:16px;font-weight:700;}
-  .keytag{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--key);
+  .keytag{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--kc);
     border-radius:999px;padding:1px 9px;margin-right:6px;vertical-align:2px;}
-  .item.key .amtbtn{border-color:var(--key);color:var(--key);font-size:19px;}
-  .item.key .amtbtn.done{background:var(--key);color:#fff;}
-  .day.key{background:var(--key-bg);}
-  .day .star{font-size:10px;color:var(--key);font-weight:700;line-height:1.1;}
-  .day .amt.key{background:var(--key);}
+  .item.key .amtbtn{border-color:var(--kc);color:var(--kc);font-size:19px;}
+  .item.key .amtbtn.done{background:var(--kc);color:#fff;}
+  .day.key-rec{background:var(--rec-bg);} .day.key-out{background:var(--out-bg);}
+  .day .star{font-size:10px;font-weight:700;line-height:1.1;white-space:nowrap;}
+  .day .star .r{color:var(--rec);} .day .star .o{color:var(--out);}
+  .day .amt.key-rec{background:var(--rec);} .day .amt.key-out{background:var(--out);}
+  .hd h1{white-space:nowrap;}
+  .hd-btns button.sum{background:#3a4756;color:#fff;}
+  .sumbox{text-align:center;}
+  .sum-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .sum-nav button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 14px;font-size:16px;}
+  .sum-nav b{font-size:17px;}
+  .sum-big{font-size:30px;font-weight:700;margin:4px 0 2px;}
+  .sum-lab{font-size:12px;color:var(--soft);}
+  .sum-sub{display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:14px;padding-top:10px;font-size:14px;}
 
   /* ===== シート ===== */
   .overlay{position:fixed;inset:0;z-index:30;display:none;background:rgba(20,28,36,.5);align-items:flex-end;}
@@ -184,6 +202,8 @@
   <div class="hd">
     <h1>マンスリーノート</h1>
     <div class="hd-btns">
+      <button class="sum" onclick="openSum('個人')">個人</button>
+      <button class="sum" onclick="openSum('法人')">法人</button>
       <button onclick="openSet()">設定</button>
       <button onclick="lockNow()">ロック</button>
     </div>
@@ -241,6 +261,20 @@
         <button class="del" id="e_del" onclick="delItem()">削除</button>
         <button class="pri" onclick="saveItem()">保存</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 年間合計 -->
+<div class="overlay" id="ovSum">
+  <div class="sheet">
+    <div class="sh-head"><span id="sumTitle">年間合計</span><button onclick="closeOv('ovSum')">閉じる</button></div>
+    <div class="sh-body sumbox">
+      <div class="sum-nav"><button onclick="sumMove(-1)">‹</button><b id="sumYear"></b><button onclick="sumMove(1)">›</button></div>
+      <div class="sum-lab">年間の合計収入（予定）</div>
+      <div class="sum-big num" id="sumTotal"></div>
+      <div class="sum-sub"><span>うち入金済み</span><b class="num" id="sumDone"></b></div>
+      <p class="note" style="text-align:left">元本回収と投資実行は収入に含めていません。金額は税引前です。</p>
     </div>
   </div>
 </div>
@@ -380,7 +414,7 @@ $("lkReset").onclick = () => {
   localStorage.removeItem(SKEY); localStorage.removeItem(FKEY); location.reload();
 };
 function lockNow(){
-  KEY = null; PASS = null; db.items = []; $("days").innerHTML = ""; $("todo").innerHTML = ""; $("dayList").innerHTML = "";
+  KEY = null; PASS = null; keyOpen = false; closeOv("ovSum"); db.items = []; $("days").innerHTML = ""; $("todo").innerHTML = ""; $("dayList").innerHTML = "";
   showLock("open");
 }
 /* パスコードで開く（Face IDからも使う） */
@@ -507,6 +541,20 @@ let viewY, viewM, selDay = null;
 function goToday(){ const t = today0(); viewY = t.getFullYear(); viewM = t.getMonth(); selDay = ymd(t); render(); }
 function moveMonth(n){ viewM += n; if(viewM < 0){ viewM = 11; viewY--; } if(viewM > 11){ viewM = 0; viewY++; } selDay = null; render(); }
 function pickDay(s){ selDay = s; render(); }
+let keyOpen = false;               // 重要な予定は開いたときだけ中身を表示
+function toggleKey(){ keyOpen = !keyOpen; render(); }
+/* 年間合計（個人／法人） */
+let sumKind = "個人", sumYear = new Date().getFullYear();
+function sumOf(list){ return list.filter(i => !isKey(i)).reduce((a,i) => a + Number(i.amount||0), 0); }
+function openSum(k){ sumKind = k; sumYear = new Date().getFullYear(); drawSum(); $("ovSum").classList.add("show"); }
+function sumMove(n){ sumYear += n; drawSum(); }
+function drawSum(){
+  const list = db.items.filter(i => (i.case || "").includes(sumKind) && i.date.slice(0,4) === String(sumYear));
+  $("sumTitle").textContent = sumKind + "の年間合計";
+  $("sumYear").textContent = sumYear + "年（1〜12月）";
+  $("sumTotal").textContent = fmtAmt(sumOf(list));
+  $("sumDone").textContent = fmtAmt(sumOf(list.filter(i => i.done)));
+}
 function jumpTo(s){ const d = new Date(s + "T00:00:00"); viewY = d.getFullYear(); viewM = d.getMonth(); selDay = s; render(); document.getElementById("hDay").scrollIntoView({behavior:"smooth"}); }
 
 function itemHTML(it){
@@ -515,10 +563,10 @@ function itemHTML(it){
   const when = it.done ? "" : n === 0 ? "（本日）" : n > 0 ? "（あと" + n + "日）" : "（" + (-n) + "日超過）";
   const out = isOut(it), key = isKey(it);
   const showLine = !out && !it.done && (st === "warn" || st === "asked" || st === "bad");
-  return '<div class="item ' + st + (key ? ' key' : '') + '">' +
+  return '<div class="item ' + st + (key ? ' key ' + (out ? 'out' : 'rec') : '') + '">' +
     '<div class="it-top"><span class="it-date num">' + fmtD(it.date) + ' ' + when + '</span>' +
       '<span class="it-state ' + st + '">' + (out ? STATE_TXT_OUT : STATE_TXT)[st] + '</span></div>' +
-    '<div class="it-name">' + (key ? '<span class="keytag">★重要</span>' : '') + esc(it.case) + '　<small>' + esc(it.kind) + (it.to ? '／' + esc(it.to) : '') + '</small></div>' +
+    '<div class="it-name">' + (key ? '<span class="keytag">' + (out ? '★実行' : '★回収') + '</span>' : '') + esc(it.case) + '　<small>' + esc(it.kind) + (it.to ? '／' + esc(it.to) : '') + '</small></div>' +
     '<div class="it-btns">' +
       '<button class="amtbtn num' + (it.done ? ' done' : '') + '" onclick="toggleDone(\'' + it.id + '\')">' +
         (it.done ? '✓ ' : '') + (out ? '出金 ' : '') + fmtAmt(it.amount) +
@@ -539,14 +587,17 @@ function render(){
 
   /* ★重要な予定（未完了の元本回収・投資実行を直近から） */
   const keys = items.filter(it => isKey(it) && !it.done);
-  $("keybox").innerHTML = '<h4>★ 重要な予定（元本回収・投資実行）</h4>' + (keys.length ? keys.slice(0,6).map(it => {
+  $("keybox").innerHTML = '<button class="khead" onclick="toggleKey()"><span>★ 重要な予定（元本回収・投資実行）</span>' +
+    '<span class="kcount">' + keys.length + '件 ' + (keyOpen ? '▲ 閉じる' : '▼ 開く') + '</span></button>' +
+    (!keyOpen ? '' : '<div class="kbody"><div class="klegend"><span><i style="background:var(--rec)"></i>元本回収</span><span><i style="background:var(--out)"></i>投資実行</span></div>' +
+    (keys.length ? keys.slice(0,6).map(it => {
     const n = daysTo(it.date);
-    return '<button class="krow' + (isOut(it) ? ' out' : '') + '" onclick="jumpTo(\'' + it.date + '\')">' +
+    return '<button class="krow ' + (isOut(it) ? 'out' : 'rec') + '" onclick="jumpTo(\'' + it.date + '\')">' +
       '<span class="kd num">' + fmtD(it.date) + '</span>' +
       '<span class="kn">' + esc(it.case) + ' ' + esc(it.kind) + '</span>' +
       '<span class="ka num">' + fmtAmt(it.amount) + '</span>' +
       '<span class="kc num">' + (n < 0 ? (-n) + '日超過' : n === 0 ? '本日' : 'あと' + n + '日') + '</span></button>';
-  }).join("") : '<div style="font-size:12px;opacity:.8">予定はありません</div>');
+  }).join("") : '<div style="font-size:12px;opacity:.8">予定はありません</div>') + '</div>');
 
   /* 要対応（期限超過 → 依頼時期 → 依頼済み） */
   const order = {bad:0, warn:1, asked:2};
@@ -588,11 +639,14 @@ function render(){
       if(sts.includes("bad")) cls += " blink-bad"; else if(sts.includes("warn")) cls += " blink-warn";
       const sum = inSum(its) || its.reduce((a,x) => a + Number(x.amount||0), 0);
       const kItems = its.filter(isKey);
+      let kcls = "";
       if(kItems.length){
-        cls += " key";
-        amt = '<span class="star">★重要</span>';
+        const hasO = kItems.some(isOut), hasR = kItems.some(x => !isOut(x));
+        kcls = hasO && !hasR ? "key-out" : "key-rec";
+        cls += " " + kcls;
+        amt = '<span class="star">' + (hasR ? '<span class="r">★回収</span>' : '') + (hasO ? '<span class="o">' + (hasR ? '★' : '★実行') + '</span>' : '') + '</span>';
       }
-      amt += '<span class="amt num ' + (kItems.length && top === "plan" ? "key" : top) + '">' + cellAmt(sum) + '</span>';
+      amt += '<span class="amt num ' + (kItems.length && top === "plan" ? kcls : top) + '">' + cellAmt(sum) + '</span>';
     }
     html += '<div class="' + cls + '" onclick="pickDay(\'' + s + '\')"><span class="d">' + d.getDate() + '</span>' + amt + '</div>';
   }
@@ -720,7 +774,7 @@ async function restoreBak(){
 }
 
 function closeOv(id){ $(id).classList.remove("show"); }
-["ovEdit","ovSet","ovImp","ovBak"].forEach(id => $(id).addEventListener("click", e => {
+["ovEdit","ovSet","ovImp","ovBak","ovSum"].forEach(id => $(id).addEventListener("click", e => {
   if(e.target.id === id){ id === "ovSet" ? closeSet() : closeOv(id); }
 }));
 
