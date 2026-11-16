@@ -274,7 +274,7 @@
       <div class="sum-lab">年間の合計収入（予定）</div>
       <div class="sum-big num" id="sumTotal"></div>
       <div class="sum-sub"><span>うち入金済み</span><b class="num" id="sumDone"></b></div>
-      <p class="note" style="text-align:left">元本回収と投資実行は収入に含めていません。金額は税引前です。</p>
+      <p class="note" style="text-align:left">元本回収と投資実行は収入に含めていません。非課税収入はすべて個人に入れています。金額は税引前です。</p>
     </div>
   </div>
 </div>
@@ -546,15 +546,25 @@ function toggleKey(){ keyOpen = !keyOpen; render(); }
 /* 年間合計（個人／法人） */
 let sumKind = "個人", sumYear = new Date().getFullYear();
 function sumOf(list){ return list.filter(i => !isKey(i)).reduce((a,i) => a + Number(i.amount||0), 0); }
-function openSum(k){ sumKind = k; sumYear = new Date().getFullYear(); drawSum(); $("ovSum").classList.add("show"); }
+/* 区分：非課税収入はすべて個人。それ以外は案件名の「個人」「法人」で判定 */
+function ownerOf(i){ if(/非課税/.test(i.kind || "")) return "個人";
+  const c = i.case || ""; return c.includes("法人") ? "法人" : c.includes("個人") ? "個人" : ""; }
+/* 個人は1〜12月、法人は11月〜翌10月（○年10月期） */
+function curPeriod(k){ const t = new Date(); return k === "法人" ? t.getFullYear() + (t.getMonth() >= 10 ? 1 : 0) : t.getFullYear(); }
+function inPeriod(k, y, date){
+  if(k === "法人"){ const from = (y-1) + "-11-01", to = y + "-10-31"; return date >= from && date <= to; }
+  return date.slice(0,4) === String(y);
+}
+function openSum(k){ sumKind = k; sumYear = curPeriod(k); drawSum(); $("ovSum").classList.add("show"); }
 function sumMove(n){ sumYear += n; drawSum(); }
 function drawSum(){
-  const list = db.items.filter(i => (i.case || "").includes(sumKind) && i.date.slice(0,4) === String(sumYear));
+  const list = db.items.filter(i => ownerOf(i) === sumKind && inPeriod(sumKind, sumYear, i.date));
   $("sumTitle").textContent = sumKind + "の年間合計";
-  $("sumYear").textContent = sumYear + "年（1〜12月）";
+  $("sumYear").textContent = sumKind === "法人" ? sumYear + "年10月期（" + (sumYear-1) + "/11〜" + sumYear + "/10）" : sumYear + "年（1〜12月）";
   $("sumTotal").textContent = fmtAmt(sumOf(list));
   $("sumDone").textContent = fmtAmt(sumOf(list.filter(i => i.done)));
 }
+
 function jumpTo(s){ const d = new Date(s + "T00:00:00"); viewY = d.getFullYear(); viewM = d.getMonth(); selDay = s; render(); document.getElementById("hDay").scrollIntoView({behavior:"smooth"}); }
 
 function itemHTML(it){
