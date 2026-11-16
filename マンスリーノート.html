@@ -153,6 +153,11 @@
   .sum-nav b{font-size:17px;}
   .sum-big{font-size:30px;font-weight:700;margin:4px 0 2px;}
   .sum-lab{font-size:12px;color:var(--soft);}
+  .sum-bd{text-align:left;margin-top:14px;}
+  .sum-bd h5{margin:0 0 6px;font-size:12px;color:var(--soft);font-weight:700;}
+  .bd-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;}
+  .bd-row small{color:var(--soft);font-size:11px;margin-left:4px;}
+  .bd-bar{height:4px;border-radius:2px;background:var(--accent);margin-top:4px;}
   .sum-sub{display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:14px;padding-top:10px;font-size:14px;}
 
   /* ===== シート ===== */
@@ -274,6 +279,7 @@
       <div class="sum-lab">年間の合計収入（予定）</div>
       <div class="sum-big num" id="sumTotal"></div>
       <div class="sum-sub"><span>うち入金済み</span><b class="num" id="sumDone"></b></div>
+      <div class="sum-bd" id="sumBd"></div>
       <p class="note" style="text-align:left">元本回収と投資実行は収入に含めていません。非課税収入はすべて個人に入れています。金額は税引前です。</p>
     </div>
   </div>
@@ -304,7 +310,7 @@
   <div class="sheet">
     <div class="sh-head"><span>まとめて取り込み</span><button onclick="closeOv('ovImp')">閉じる</button></div>
     <div class="sh-body frm">
-      <p class="note">1行に1件、「日付,案件,種別,金額(万円),宛先」の形で貼り付けてください。<br>例：2026/12/10,①法人,元本回収,10000,〇〇様</p>
+      <p class="note">1行に1件、「日付,案件,種別,金額(万円),宛先」の形で貼り付けてください。<br>例：2026/12/10,①法人,元本回収,10000,〇〇様<br>受け取り済みの実績は、行の最後に「,済」を付けると入金済みで入ります。</p>
       <textarea id="impText" style="min-height:200px;font-size:13px"></textarea>
       <p class="note">同じ日付・案件・種別の予定がすでにある場合は、金額と宛先だけ更新します（完了の記録は残ります）。</p>
       <div class="sh-btns"><button class="pri" onclick="doImport()">取り込む</button></div>
@@ -563,6 +569,13 @@ function drawSum(){
   $("sumYear").textContent = sumKind === "法人" ? sumYear + "年10月期（" + (sumYear-1) + "/11〜" + sumYear + "/10）" : sumYear + "年（1〜12月）";
   $("sumTotal").textContent = fmtAmt(sumOf(list));
   $("sumDone").textContent = fmtAmt(sumOf(list.filter(i => i.done)));
+  /* 項目別の内訳（金額の大きい順） */
+  const by = {};
+  list.filter(i => !isKey(i)).forEach(i => { const k = i.kind || "その他"; by[k] = (by[k] || 0) + Number(i.amount || 0); });
+  const tot = sumOf(list), rows = Object.entries(by).sort((a,b) => b[1] - a[1]);
+  $("sumBd").innerHTML = rows.length ? '<h5>項目別の内訳</h5>' + rows.map(([k,v]) =>
+    '<div class="bd-row"><span>' + esc(k) + '<small>' + (tot ? Math.round(v / tot * 1000) / 10 : 0) + '%</small></span><b class="num">' + fmtAmt(Math.round(v*10)/10) + '</b></div>'
+  ).join("") : '<p class="note">この期間の収入はありません</p>';
 }
 
 function jumpTo(s){ const d = new Date(s + "T00:00:00"); viewY = d.getFullYear(); viewM = d.getMonth(); selDay = s; render(); document.getElementById("hDay").scrollIntoView({behavior:"smooth"}); }
@@ -745,9 +758,10 @@ function doImport(){
     if(!m || isNaN(amt)){ bad.push(i+1); return; }
     const date = m[1] + "-" + m[2].padStart(2,"0") + "-" + m[3].padStart(2,"0");
     const rec = {date, case:c[1]||"", kind:c[2]||"", amount:amt, to:c[4]||""};
+    const isDone = /済/.test(c[5] || "");   // 6列目に「済」があれば入金済み（実行済み）で取り込む
     const ex = db.items.find(x => x.date === date && x.case === rec.case && x.kind === rec.kind);
-    if(ex){ ex.amount = amt; if(rec.to) ex.to = rec.to; upd++; }
-    else{ db.items.push(Object.assign({id:uid(), done:false, doneAt:"", asked:"", memo:""}, rec)); add++; }
+    if(ex){ ex.amount = amt; if(rec.to) ex.to = rec.to; if(isDone && !ex.done){ ex.done = true; ex.doneAt = date; } upd++; }
+    else{ db.items.push(Object.assign({id:uid(), done:isDone, doneAt:isDone ? date : "", asked:"", memo:""}, rec)); add++; }
   });
   persist(); closeOv("ovImp"); render();
   alert("追加 " + add + "件／更新 " + upd + "件" + (bad.length ? "\n読めなかった行：" + bad.join(", ") + "行目" : ""));
